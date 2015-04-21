@@ -5,7 +5,7 @@
 #include <curses.h>
 #include <signal.h>
 
-#define TIMEOUT 15000000
+#define TIMEOUT 150000000
 
 typedef struct { int x, y; } point;
 point win_max;
@@ -63,11 +63,20 @@ void updateShip() {
 }
 void updateBomb() {
 	if (bomb_pos != NULL) {
+		// erase previous bomb pos
+		move(bomb_pos->y, bomb_pos->x);
+		delch();
+		// update bomb position
 		bomb_pos->y = bomb_pos->y+1;
 		bomb_pos->x = bomb_pos->x-1;
-		//move(bomb_pos->y,bomb_pos->x);
-		color_set(1, NULL);
-		mvaddstr(bomb_pos->y,bomb_pos->x,"-");
+		// remove bomb if it's position is outside the terminal
+		if (bomb_pos->y > win_max.y) {
+			free(bomb_pos);
+			bomb_pos = NULL;
+		} else {
+			color_set(1, NULL);
+			mvaddstr(bomb_pos->y,bomb_pos->x,"-");
+		}
 	}
 }
 void dropBomb() {
@@ -86,6 +95,7 @@ int init(void) {
 	nodelay(stdscr,TRUE);
 	// get our maximum window dimensions
 	getmaxyx(stdscr, win_max.y, win_max.x);
+	ship_pos = malloc(sizeof(point));
 	ship_pos->x = win_max.x-2;
 	ship_pos->y = 5;
 	// set up initial windows
@@ -138,6 +148,16 @@ int init(void) {
 	return 0;
 }
 
+void cleanup() {
+	free(ship_pos);
+	ship_pos = NULL;
+	free(bomb_pos);
+	bomb_pos = NULL;
+	free(gun_pos);
+	gun_pos = NULL;
+}
+
+
 int main(void) {
 	int initval = init();
 	if (initval == 0) {
@@ -169,7 +189,9 @@ int main(void) {
 	/*  Clean up after ourselves  */
 	//delwin(mainwin);
 	endwin();
+	cleanup();
 
 	return EXIT_SUCCESS;
 }
+
 

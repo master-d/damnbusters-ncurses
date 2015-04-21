@@ -5,13 +5,13 @@
 #include <curses.h>
 #include <signal.h>
 
-#define TIMEOUT 150000000
+#define TIMEOUT 15000000
 
 typedef struct { int x, y; } point;
 point win_max;
-point ship_pos;
-point bomb_pos;
-point gun_pos;
+point* ship_pos;
+point* bomb_pos;
+point* gun_pos;
 bool refresh_scr = false;
 timer_t gTimerid;
 int key = 0;
@@ -47,25 +47,35 @@ int startTimer() {
 	return 0;
 }
 void updateShip() {
-	ship_pos.x = ship_pos.x-2;
-	if (ship_pos.x < 0) {
-		ship_pos.x = win_max.x-1;
-		move(ship_pos.y,0);
+	ship_pos->x = ship_pos->x-2;
+	if (ship_pos->x < 0) {
+		ship_pos->x = win_max.x-1;
+		move(ship_pos->y,0);
 		clrtoeol();
 	} else {
-		move(ship_pos.y,ship_pos.x+1);
+		move(ship_pos->y,ship_pos->x+1);
 		delch();
-		move(ship_pos.y,ship_pos.x+2);
+		move(ship_pos->y,ship_pos->x+2);
 		delch();
 	}
 	color_set(1, NULL);
-	mvaddstr(ship_pos.y,ship_pos.x,"++");
+	mvaddstr(ship_pos->y,ship_pos->x,"++");
+}
+void updateBomb() {
+	if (bomb_pos != NULL) {
+		bomb_pos->y = bomb_pos->y+1;
+		bomb_pos->x = bomb_pos->x-1;
+		//move(bomb_pos->y,bomb_pos->x);
+		color_set(1, NULL);
+		mvaddstr(bomb_pos->y,bomb_pos->x,"-");
+	}
 }
 void dropBomb() {
 	// only allow bomb if bomb pos is null
-	if (bomb_pos.x == NULL) {
-		bomb_pos.x = ship_pos.x;
-		bomb_pos.y = ship_pos.y+1;
+	if (bomb_pos == NULL) {
+		bomb_pos = malloc(sizeof(point));
+		bomb_pos->x = ship_pos->x;
+		bomb_pos->y = ship_pos->y+1;
 	}
 }
 int init(void) {
@@ -76,8 +86,8 @@ int init(void) {
 	nodelay(stdscr,TRUE);
 	// get our maximum window dimensions
 	getmaxyx(stdscr, win_max.y, win_max.x);
-	ship_pos.x = win_max.x-2;
-	ship_pos.y = 5;
+	ship_pos->x = win_max.x-2;
+	ship_pos->y = 5;
 	// set up initial windows
 	//mainwin = newwin(win_max.y, win_max.x, 0, 0);
 	start_color();
@@ -135,7 +145,7 @@ int main(void) {
 		while to get the full screen effect  */
 		//(void) signal (SIGALRM, handleAlarm);
 		color_set(1, NULL);
-		mvaddstr(ship_pos.y,ship_pos.x,"++");
+		mvaddstr(ship_pos->y,ship_pos->x,"++");
 		refresh();
 		key = getch();
 		startTimer();
@@ -147,6 +157,7 @@ int main(void) {
 			}
 			if (refresh_scr) {
 				updateShip();
+				updateBomb();
 				refresh();
 				//startTimer();
 				refresh_scr = false;

@@ -5,18 +5,23 @@
 #include <curses.h>
 #include <signal.h>
 
-#define TIMEOUT 150000000
+#define TIMEOUT 100000000
 
 typedef struct { int x, y; } point;
+int dblocks[15][30];
 point win_max;
 point* ship_pos;
 point* bomb_pos;
 point* gun_pos;
 bool refresh_scr = false;
+bool dead = false;
 timer_t gTimerid;
 int key = 0;
 //WINDOW *mainwin;
 
+void gameover() {
+	mvaddstr(win_max.y/2, win_max.x/2, "faggot");
+}
 void handleAlarm() {
 	refresh_scr = true;
 }
@@ -24,7 +29,7 @@ int startTimer() {
 	// setup timer
 	//struct itimerspec ts = { {1, TIMEOUT*1000}, {1, TIMEOUT*1000} };
 	// seconds/nanos before first run, seconds/nanos for interval
-	struct itimerspec ts = { {0, TIMEOUT}, {5, 0} };
+	struct itimerspec ts = { {0, TIMEOUT}, {2, 0} };
 	struct sigaction sa;
 	struct sigevent se;
 	se.sigev_notify = SIGEV_SIGNAL;
@@ -49,17 +54,57 @@ int startTimer() {
 void updateShip() {
 	ship_pos->x = ship_pos->x-2;
 	if (ship_pos->x < 0) {
-		ship_pos->x = win_max.x-1;
+		ship_pos->x = win_max.x-2;
 		move(ship_pos->y,0);
 		clrtoeol();
+		ship_pos->y = rand() % (win_max.y-16)+ 1;
 	} else {
-		move(ship_pos->y,ship_pos->x+1);
-		delch();
-		move(ship_pos->y,ship_pos->x+2);
-		delch();
+		if (dead) {
+			if (ship_pos->y > win_max.y) {
+				gameover();
+			} else {
+				move(ship_pos->y-1,ship_pos->x);
+				delch();
+				ship_pos->x = ship_pos->x+2;
+				ship_pos->y = ship_pos->y+1;
+				mvaddch(ship_pos->y, ship_pos->x, (rand() % 32) + 32);
+			}
+		} else {
+			move(ship_pos->y,ship_pos->x+1);
+			delch();
+			move(ship_pos->y,ship_pos->x+2);
+			delch();
+		}
 	}
-	color_set(1, NULL);
-	mvaddstr(ship_pos->y,ship_pos->x,"++");
+	if (!dead) {
+		color_set(1, NULL);
+		mvaddstr(ship_pos->y,ship_pos->x,"++");
+	}
+}
+void updateGuns() {
+	if (gun_pos == NULL) {
+		// randomly attempt to fire a round
+		if ((rand() % 100) > 90) {
+			gun_pos = malloc(sizeof(point));
+			gun_pos->x = 16;
+			gun_pos->y = win_max.y-16;
+		}
+	} else {
+		// erase previous gun pos
+		move(gun_pos->y, gun_pos->x);
+		delch();
+		// update gun position
+		gun_pos->y = gun_pos->y-1;
+		gun_pos->x = gun_pos->x+1;
+		if (gun_pos->y < 1) {
+			free(gun_pos);
+			gun_pos = NULL;
+		} else {
+			color_set(2, NULL);
+			mvaddstr(gun_pos->y,gun_pos->x,"*");
+		}
+
+	}
 }
 void updateBomb() {
 	if (bomb_pos != NULL) {
@@ -87,6 +132,27 @@ void dropBomb() {
 		bomb_pos->y = ship_pos->y+1;
 	}
 }
+void detectCollisions() {
+	// check to see if bullet has hit the ship
+	if (gun_pos != NULL) {
+		if (gun_pos->y == ship_pos->y && (gun_pos->x == ship_pos->x || gun_pos->x == ship_pos->x-1)) {
+			dead = true;
+		}
+	}
+	// check to see if bomb has impacted the dam
+	if (bomb_pos != NULL) {
+		if (win_max.y - bomb_pos->y <= 15 && bomb_pos->x <= 30) {
+			// dam hit
+			if (dblocks[win_max.y-bomb_pos->y][bomb_pos->x] != 0) {
+				dblocks[win_max.y-bomb_pos->y][bomb_pos->x] = 0;
+				move(bomb_pos->y, bomb_pos->x);
+				delch();
+				free(bomb_pos);
+				bomb_pos = NULL;
+			}
+		}
+	}
+}
 int init(void) {
 	// setup ncurses dam
 	initscr();
@@ -95,9 +161,6 @@ int init(void) {
 	nodelay(stdscr,TRUE);
 	// get our maximum window dimensions
 	getmaxyx(stdscr, win_max.y, win_max.x);
-	ship_pos = malloc(sizeof(point));
-	ship_pos->x = win_max.x-2;
-	ship_pos->y = 5;
 	// set up initial windows
 	//mainwin = newwin(win_max.y, win_max.x, 0, 0);
 	start_color();
@@ -111,24 +174,27 @@ int init(void) {
 		int x,y,z=0;
 		//int y=0;
 
-		init_pair(1,  COLOR_BLACK,   COLOR_WHITE);
-		init_pair(2,  COLOR_WHITE,   COLOR_BLACK);
-		init_pair(3,  COLOR_MAGENTA, COLOR_BLACK);
-		init_pair(4,  COLOR_BLUE, COLOR_BLACK);
-		init_pair(5,  COLOR_BLACK, COLOR_BLUE);
+		init_pair(1, COLOR_BLACK,   COLOR_WHITE);
+		init_pair(2, COLOR_WHITE,   COLOR_BLACK);
+		init_pair(3, COLOR_MAGENTA, COLOR_BLACK);
+		init_pair(4, COLOR_BLUE,	COLOR_BLACK);
+		init_pair(5, COLOR_BLACK,	COLOR_BLUE);
 
-		for (x=0; x<15; x++) {
+		for (y=0; y<15; y++) {
 			color_set(1, NULL);
 			// draw dam
-			for (y=15-x; y>=0; y--) {
-				mvaddstr(win_max.y-x, 15+y, " ");
+			for (x=15-y; x>=0; x--) {
+				dblocks[y][15+x] = " ";
+				mvaddstr(win_max.y - y, 15+x, " ");
 			}
 			// draw water behind dam
 			color_set(5, NULL);
-			for (z=0; z<=15; z++) {
-				mvaddch(win_max.y-x, z, ACS_CKBOARD);
+			for (x=0; x<=15; x++) {
+				dblocks[y][x] = ACS_CKBOARD;
+				mvaddch(win_max.y - y, x, ACS_CKBOARD);
 			}
-			if (x==14) {
+			// draw the top of the dam and guns
+			if (y==14) {
 				color_set(2, NULL);
 				move(win_max.y-15,0);
 				hline('_',16);
@@ -136,13 +202,18 @@ int init(void) {
 				color_set(2, NULL);
 				mvaddstr(win_max.y-15,15,"//");
 			}
-			else if (x==0) {
+			// draw the water in front of the dam
+			else if (y==0) {
 				color_set(5, NULL);
 				move(win_max.y-1,30);
 				hline(ACS_CKBOARD,1000);
 			}
-
 		}
+		// draw the initial position of the ship
+		ship_pos = malloc(sizeof(point));
+		ship_pos->x = 0;
+		updateShip();
+
 	} else
 		return 1;
 	return 0;
@@ -161,13 +232,6 @@ void cleanup() {
 int main(void) {
 	int initval = init();
 	if (initval == 0) {
-		/*  Refresh the screen and sleep for a
-		while to get the full screen effect  */
-		//(void) signal (SIGALRM, handleAlarm);
-		color_set(1, NULL);
-		mvaddstr(ship_pos->y,ship_pos->x,"++");
-		refresh();
-		key = getch();
 		startTimer();
 		while (key != 27) {
 			key = getch();
@@ -176,8 +240,15 @@ int main(void) {
 				dropBomb();
 			}
 			if (refresh_scr) {
-				updateShip();
-				updateBomb();
+				if (dead) {
+					updateShip();
+				}
+				else {
+					updateBomb();
+					updateGuns();
+					updateShip();
+					detectCollisions();
+				}
 				refresh();
 				//startTimer();
 				refresh_scr = false;

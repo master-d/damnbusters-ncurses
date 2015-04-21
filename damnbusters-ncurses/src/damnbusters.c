@@ -8,7 +8,7 @@
 #define TIMEOUT 100000000
 
 typedef struct { int x, y; } point;
-int dblocks[15][30];
+int dblocks[15][30] = {{0},{0}};
 point win_max;
 point* ship_pos;
 point* bomb_pos;

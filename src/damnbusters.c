@@ -20,10 +20,14 @@ int key = 0;
 //WINDOW *mainwin;
 
 void gameover() {
-	mvaddstr(win_max.y/2, win_max.x/2, "faggot");
+	mvaddstr(win_max.y/2, win_max.x/2, "HURRRR!");
 }
 void handleAlarm() {
 	refresh_scr = true;
+}
+void eraseChar(int y, int x) {
+	color_set(2, NULL);
+	mvaddch(y,x,' ');
 }
 int startTimer() {
 	// setup timer
@@ -63,17 +67,14 @@ void updateShip() {
 			if (ship_pos->y > win_max.y) {
 				gameover();
 			} else {
-				move(ship_pos->y-1,ship_pos->x);
-				delch();
+				eraseChar(ship_pos->y-1,ship_pos->x);
 				ship_pos->x = ship_pos->x+2;
 				ship_pos->y = ship_pos->y+1;
 				mvaddch(ship_pos->y, ship_pos->x, (rand() % 32) + 32);
 			}
 		} else {
-			move(ship_pos->y,ship_pos->x+1);
-			delch();
-			move(ship_pos->y,ship_pos->x+2);
-			delch();
+			eraseChar(ship_pos->y,ship_pos->x+2);
+			eraseChar(ship_pos->y,ship_pos->x+3);
 		}
 	}
 	if (!dead) {
@@ -91,8 +92,7 @@ void updateGuns() {
 		}
 	} else {
 		// erase previous gun pos
-		move(gun_pos->y, gun_pos->x);
-		delch();
+		eraseChar(gun_pos->y, gun_pos->x);
 		// update gun position
 		gun_pos->y = gun_pos->y-1;
 		gun_pos->x = gun_pos->x+1;
@@ -109,8 +109,7 @@ void updateGuns() {
 void updateBomb() {
 	if (bomb_pos != NULL) {
 		// erase previous bomb pos
-		move(bomb_pos->y, bomb_pos->x);
-		delch();
+		eraseChar(bomb_pos->y, bomb_pos->x);
 		// update bomb position
 		bomb_pos->y = bomb_pos->y+1;
 		bomb_pos->x = bomb_pos->x-1;
@@ -145,8 +144,7 @@ void detectCollisions() {
 			// dam hit
 			if (dblocks[win_max.y-bomb_pos->y][bomb_pos->x] != 0) {
 				dblocks[win_max.y-bomb_pos->y][bomb_pos->x] = 0;
-				move(bomb_pos->y, bomb_pos->x);
-				delch();
+				eraseChar(bomb_pos->y, bomb_pos->x);
 				free(bomb_pos);
 				bomb_pos = NULL;
 			}
@@ -155,6 +153,7 @@ void detectCollisions() {
 }
 int init(void) {
 	// setup ncurses dam
+	srand(time(NULL));
 	initscr();
 	noecho();
 	curs_set(FALSE);
@@ -171,7 +170,7 @@ int init(void) {
 	we can use. We use 13 in this program, so we check
 	to make sure we have enough available.               */
 	if ( has_colors() && COLOR_PAIRS >= 5 ) {
-		int x,y,z=0;
+		int x,y=0;
 		//int y=0;
 
 		init_pair(1, COLOR_BLACK,   COLOR_WHITE);
@@ -184,7 +183,7 @@ int init(void) {
 			color_set(1, NULL);
 			// draw dam
 			for (x=15-y; x>=0; x--) {
-				dblocks[y][15+x] = " ";
+				dblocks[y][15+x] = ' ';
 				mvaddstr(win_max.y - y, 15+x, " ");
 			}
 			// draw water behind dam
